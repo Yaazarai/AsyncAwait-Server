@@ -6,6 +6,7 @@ namespace AsyncNetworking {
         public void TryAdd(T obj) { lock (locker) { this.Add(obj); } }
         public bool TryRemove(T obj) { lock(locker) { return this.Remove(obj); } }
         public int TryFindIndex(T obj) { lock(locker) { return this.FindIndex(x => x.Equals(obj)); } }
+        public IList<T> TryEnumerator() { lock(locker) { return new List<T>(this); } }
         public LockedList() : base() { }
     }
 }
