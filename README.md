@@ -4,7 +4,15 @@ TCP server written using the async/await pattern for efficiency.
 Create a new TCP server with attached parameters (and optional parameters):
 ```C#
 AsyncServer<AsyncClient> server = AsyncServer(int clientBufferSize, IPAddress address, int port,
-    int maxClients = int.MaxValue, bool sharedBufferPool = false);
+    int maxClients = int.MaxValue, bool sharedBufferPool = false, bool separatePackets = true);
+    
+/*
+    SharedBufferPool : The server uses an ArrayPool<byte> for creating buffers to avoid fragmentation.
+        This parameter decides whether the bufferpool should be a shared resource or be newly allocated.
+    SeparatePackets : The server can now handle Nagle's algorithm by reading the first byte of each message
+        to figure out the size of messages sent to separate out grouped messages (max message size is 256 bytes when enabled).
+        ** If disabled you may receive messages grouped together in a single buffer that you'll need to handle on your own.
+*/
 ```
 On the thread that you wish to execute the server on call:
 ```C#
