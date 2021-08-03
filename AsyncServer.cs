@@ -7,6 +7,9 @@ using System.Buffers;
 
 namespace AsyncNetworking {
     public class AsyncServer<T> where T : AsyncClient {
+        public bool SeparatePackets { get; private set; }
+        public ulong PacketsReceived { get; private set; }
+        public ulong PacketsProcessed { get; private set; }
         public TcpListener Listener { get; private set; }
         public CancellationTokenSource ShutdownToken { get; private set; }
         public IPAddress Address { get; private set; }
@@ -19,15 +22,20 @@ namespace AsyncNetworking {
         public event Func<object, ServerEventArgs, CancellationToken, Task> Startup, Shutdown, Failed;
         public event Func<object, ClientEventArgs, CancellationToken, Task> Connected, Disconnected, DataReceived;
 
-        public AsyncServer(int clientBufferSize, IPAddress address, int port, int maxClients = int.MaxValue, bool sharedBufferPool = false) {
+        public AsyncServer(int clientBufferSize, IPAddress address, int port, int maxClients = int.MaxValue, bool sharedBufferPool = false, bool separatePackets = true) {
             Listener = new TcpListener(address, port);
             ShutdownToken = new CancellationTokenSource();
+            Listener.Server.NoDelay = true;
             Address = address;
             Port = port;
             BufferPool = (sharedBufferPool) ? ArrayPool<byte>.Shared : ArrayPool<byte>.Create();
             BufferSize = clientBufferSize;
             MaxClients = maxClients;
             Clients = new LockedList<T>();
+            
+            PacketsProcessed = 0;
+            PacketsReceived = 0;
+            SeparatePackets = separatePackets;
         }
 
         public async Task Listen() {
@@ -58,14 +66,29 @@ namespace AsyncNetworking {
                         int bytes = await client.Client.GetStream().ReadAsync(rcvBuffer, 0, rcvBuffer.Length, client.ShutdownToken.Token);
 
                         if (bytes > 0) {
-                            /*
-                                Due to Nagle's Algorithm multiple packets may be received on each ReadAsync().
-                                Always check each buffer on DataReceived.InvokeAsync() for multiple packets.
-                            */
-                            byte[] buffer = BufferPool.Rent(Math.Min(BufferSize, bytes));
-                            Buffer.BlockCopy(rcvBuffer, 0, buffer, 0, bytes);
-                            Task received = DataReceived.InvokeAsync(this, new ClientEventArgs(client, buffer), client.ShutdownToken.Token);
-                            _ = received.ContinueWith(_ => { BufferPool.Return(buffer); });
+                            if (SeparatePackets) {
+                                /*
+                                Accounts for Naggle's algorithm and generates multiple packets based on first byte (size) of each packet.
+                                NOTE: This requires that the very first byte of EVERY packet start with a size with type a of byte.
+                                */
+                                for (int size = 0, i = 0; i < bytes; i += size) {
+                                    size = (byte)(Math.Min(rcvBuffer[i], bytes));
+                                    byte[] buffer = BufferPool.Rent(size);
+                                    Buffer.BlockCopy(rcvBuffer, i, buffer, 0, size);
+                                    Task received = DataReceived.InvokeAsync(this, new ClientEventArgs(client, buffer), client.ShutdownToken.Token);
+                                    _ = received.ContinueWith(_ => { BufferPool.Return(buffer); });
+                                    PacketsProcessed++;
+                                }
+                            } else {
+                                //Due to Nagle's Algorithm multiple packets may be received on each ReadAsync().
+                                //Always check each buffer on DataReceived.InvokeAsync() for multiple packets.
+                                byte[] buffer = BufferPool.Rent(Math.Min(BufferSize, bytes));
+                                Buffer.BlockCopy(rcvBuffer, 0, buffer, 0, bytes);
+                                Task received = DataReceived.InvokeAsync(this, new ClientEventArgs(client, buffer), client.ShutdownToken.Token);
+                                _ = received.ContinueWith(_ => { BufferPool.Return(buffer); });
+                                PacketsProcessed++;
+                            }
+                            PacketsReceived++;
                         }
                     }
 
