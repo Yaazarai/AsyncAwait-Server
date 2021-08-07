@@ -1,7 +1,7 @@
 using System;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Net.Sockets;
 
 namespace AsyncNetworking {
     public class AsyncClient {
@@ -14,13 +14,13 @@ namespace AsyncNetworking {
         }
 
         ~AsyncClient() {
-            Client.Close();
+            TryShutdown();
             ShutdownToken.Dispose();
         }
 
         public void TryShutdown() {
             if (!ShutdownToken.IsCancellationRequested) {
-                Client.Client.Disconnect(true);
+                Client.Client.Close();
                 ShutdownToken.Cancel();
             }
         }
