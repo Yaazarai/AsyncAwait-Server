@@ -1,9 +1,10 @@
 using System;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Buffers;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
-using System.Buffers;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AsyncNetworking {
     public class AsyncServer<T> where T : AsyncClient {
@@ -17,7 +18,7 @@ namespace AsyncNetworking {
         public ArrayPool<byte> BufferPool { get; private set; }
         public int BufferSize { get; private set; }
         public long MaxClients { get; private set; }
-        public LockedList<T> Clients { get; private set; }
+        public ConcurrentDictionary<T,T> Clients { get; private set; }
 
         public event Func<object, ServerEventArgs, CancellationToken, Task> Startup, Shutdown, Failed;
         public event Func<object, ClientEventArgs, CancellationToken, Task> Connected, Disconnected, DataReceived;
@@ -31,7 +32,7 @@ namespace AsyncNetworking {
             BufferPool = (sharedBufferPool) ? ArrayPool<byte>.Shared : ArrayPool<byte>.Create();
             BufferSize = clientBufferSize;
             MaxClients = maxClients;
-            Clients = new LockedList<T>();
+            Clients = new ConcurrentDictionary<T,T>();
             
             PacketsProcessed = 0;
             PacketsReceived = 0;
@@ -55,7 +56,7 @@ namespace AsyncNetworking {
         }
 
         private async Task Accept(T client) {
-            Clients.TryAdd(client);
+            Clients.TryAdd(client, client);
             await Connected.InvokeAsync(this, new ClientEventArgs(client, null), client.ShutdownToken.Token);
             
             try {
@@ -97,20 +98,20 @@ namespace AsyncNetworking {
             } catch (Exception) { /* Catch exceptions from client ReadAsync() any exceptions thrown means disconnected client. */ }
             
             client.TryShutdown();
-            Clients.TryRemove(client);
+            Clients.TryRemove(client, out T res);
             await Disconnected.InvokeAsync(this, new ClientEventArgs(client, null), client.ShutdownToken.Token);
         }
 
         public async Task TryShutdown() {
             try {
                 await Shutdown.InvokeAsync(this, ServerEventArgs.Empty, ShutdownToken.Token);
-                foreach (var client in Clients) client.TryShutdown();
+                foreach (var client in Clients) client.Key.TryShutdown();
                 ShutdownToken.Cancel();
             } finally { }
         }
 
         ~AsyncServer() {
-            foreach (var client in Clients) client.TryShutdown();
+            foreach (var client in Clients) client.Key.TryShutdown();
             ShutdownToken.Dispose();
             Listener.Server.Dispose();
         }
