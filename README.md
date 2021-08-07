@@ -45,7 +45,9 @@ public static async Task OnStartup(object server, ServerEventArgs args, Cancella
 ```
 These asynchronous events will have two types of arguments `ServerEventArgs` (which will return ServerEventArgs.Empty by default) or `ClientEventArgs` which will contain the client that threw the event and the buffer with the data received.
 
-Just FYI when you subscribe a calling method to `DataReceived` you'll receive a buffer with data packet(s) in it. Due to Nagle's algorithm this buffer may contain multiple packets sent from a single client. This will still happen even if you manage to disable Nagle's algorithm. The buffer will be automatically disposed/returned when the `DataReceived` event returns.
+Just FYI when you subscribe a calling method to `DataReceived` you'll receive a buffer with data packet(s) in it. Due to Nagle's algorithm this buffer may contain multiple packets sent from a single client IF `SeparatePackets` is set to `false`. If `SeparatwPackets` is set to `true` then the buffer will separate out each message by reading out the first message byte as the size of the message and jumping through the buffer finding subsequent messages.
+
+The buffer will be automatically disposed/returned when the `DataReceived` event returns.
 
 When you wish to send data to a specific `AsyncClient` you can do the following. The `bytes` parameter is optional, specify if you want to send a certain number of bytes or exclude if you want to send the entire buffer:
 ```C#
