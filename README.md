@@ -55,6 +55,8 @@ The buffer will be automatically disposed/returned when the `DataReceived` event
 ---
 If `EnableUdpHost` is set to `true` then the server will create a UDP host on the same endpoint (IP and Port) as the TCP server. The UDP Host will then throw `Receive` events just as TCP clients do, except that the `ServerDataEventArgs` will not contain a client object when the `Receive` event is thrown. Please note that the UDP connection will NOT pull buffers from the server's shared internal buffer pool.
 
+Also please note that `SeparatePackets` does NOT affect the UDP host as Nagle's algorithm (which is enabled/disabled by `SeparatePackets`) is a feature of TCP, not UDP.
+
 ---
 When you wish to send data to a specific `AsyncClient` you can do the following. The `bytes` parameter is optional, specify if you want to send a certain number of bytes or exclude if you want to send the entire buffer:
 ```C#
