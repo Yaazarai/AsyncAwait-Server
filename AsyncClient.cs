@@ -15,13 +15,13 @@ namespace AsyncNetworking {
 
         ~AsyncClient() {
             TryShutdown();
-            ShutdownToken.Dispose();
+            ShutdownToken?.Dispose();
         }
 
         public void TryShutdown() {
             if (!ShutdownToken.IsCancellationRequested) {
-                Client.Client.Close();
-                ShutdownToken.Cancel();
+                Client.Client?.Close();
+                ShutdownToken?.Cancel();
             }
         }
 
