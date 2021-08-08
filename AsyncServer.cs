@@ -65,7 +65,7 @@ namespace AsyncNetworking {
                                     byte[] buffer = BufferPool.Rent(size);
                                     Buffer.BlockCopy(rcvBuffer, i, buffer, 0, size);
                                     Task received = Received.InvokeAsync(this, new ServerDataEventArgs(this, client, buffer), client.ShutdownToken.Token);
-                                    _ = received.ContinueWith(_ => { BufferPool.Return(buffer); });
+                                    _ = received.ContinueWith(_ => { BufferPool.Return(buffer); }).ConfigureAwait(false);
                                 }
                             } else {
                                 //Due to Nagle's Algorithm multiple packets may be received on each ReadAsync().
@@ -73,7 +73,7 @@ namespace AsyncNetworking {
                                 byte[] buffer = BufferPool.Rent(Math.Min(BufferSize, bytes));
                                 Buffer.BlockCopy(rcvBuffer, 0, buffer, 0, bytes);
                                 Task received = Received.InvokeAsync(this, new ServerDataEventArgs(this, client, buffer), client.ShutdownToken.Token);
-                                _ = received.ContinueWith(_ => { BufferPool.Return(buffer); });
+                                _ = received.ContinueWith(_ => { BufferPool.Return(buffer); }).ConfigureAwait(false);
                             }
                         }
                     }
