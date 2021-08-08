@@ -19,7 +19,7 @@ namespace AsyncNetworking {
 
         public AsyncServer(int clientBufferSize, IPEndPoint ipPort, bool noDelay = false, bool sharedBufferPool = false, bool separatePackets = false) {
             Listener = new TcpListener(EndPoint = ipPort);
-            ShutdownToken = new CancellationTokenSource();
+            ShutdownToken = null;
             Listener.Server.NoDelay = noDelay;
             BufferPool = (sharedBufferPool) ? ArrayPool<byte>.Shared : ArrayPool<byte>.Create();
             BufferSize = clientBufferSize;
@@ -29,30 +29,32 @@ namespace AsyncNetworking {
 
         public async Task Listen() {
             try {
-                await Startup.InvokeAsync(this, ServerDataEventArgs.Empty, ShutdownToken.Token);
+                await Startup.InvokeAsync(this, ServerDataEventArgs.Empty, ShutdownToken.Token).ConfigureAwait(false);
                 Listener.Start();
+
+                if (ShutdownToken != null) ShutdownToken.Dispose();
+                ShutdownToken = new CancellationTokenSource();
 
                 using (ShutdownToken.Token.Register(() => Listener.Stop()))
                     while (!ShutdownToken.IsCancellationRequested)
                         _ = Accept((T)Activator.CreateInstance(typeof(T), await Listener.AcceptTcpClientAsync())).ConfigureAwait(false);
             } catch (Exception) {
-                if (!ShutdownToken.IsCancellationRequested)
-                    await Failed.InvokeAsync(this, ServerDataEventArgs.Empty, ShutdownToken.Token);
+                await Failed.InvokeAsync(this, ServerDataEventArgs.Empty, ShutdownToken.Token).ConfigureAwait(false);
             }
 
-            await TryShutdown(true);
+            await TryShutdown(true).ConfigureAwait(false);
         }
 
         private async Task Accept(T client) {
             Clients.TryAdd(client, client);
-            await Connected.InvokeAsync(this, new ServerDataEventArgs(this, client), client.ShutdownToken.Token);
+            await Connected.InvokeAsync(this, new ServerDataEventArgs(this, client), client.ShutdownToken.Token).ConfigureAwait(false);
             
             try {
                 using (ShutdownToken.Token.Register(() => client.TryShutdown())) {
                     byte[] rcvBuffer = BufferPool.Rent(BufferSize);
 
                     while (!client.ShutdownToken.IsCancellationRequested) {
-                        int bytes = await client.Client.GetStream().ReadAsync(rcvBuffer, 0, rcvBuffer.Length, client.ShutdownToken.Token);
+                        int bytes = await client.Client.GetStream().ReadAsync(rcvBuffer, 0, rcvBuffer.Length, client.ShutdownToken.Token).ConfigureAwait(false);
 
                         if (bytes > 0) {
                             if (SeparatePackets) {
@@ -81,18 +83,18 @@ namespace AsyncNetworking {
             } catch (Exception) { /* Catch exceptions from client ReadAsync() any exceptions thrown means disconnected client. */ }
 
             client.TryShutdown();
+            await Disconnected.InvokeAsync(this, new ServerDataEventArgs(this, client), client.ShutdownToken.Token).ConfigureAwait(false);
             Clients.TryRemove(client, out T res);
-            await Disconnected.InvokeAsync(this, new ServerDataEventArgs(this, client), client.ShutdownToken.Token);
         }
 
         public async Task TryShutdown(bool shutdownEvent) {
-            try {
+            if (!ShutdownToken.IsCancellationRequested) {
                 if (shutdownEvent)
-                    await Shutdown.InvokeAsync(this, ServerDataEventArgs.Empty, ShutdownToken.Token);
+                    await Shutdown.InvokeAsync(this, ServerDataEventArgs.Empty, ShutdownToken.Token).ConfigureAwait(false);
                 
                 foreach (var client in Clients) client.Key.TryShutdown();
                 ShutdownToken.Cancel();
-            } finally { }
+            }
         }
 
         ~AsyncServer() {
