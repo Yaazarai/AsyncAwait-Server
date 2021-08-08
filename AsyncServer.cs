@@ -21,8 +21,7 @@ namespace AsyncNetworking {
 
         public AsyncServer(int clientBufferSize, IPEndPoint ipPort, bool enableUdpHost = false, bool noDelay = false, bool sharedBufferPool = false, bool separatePackets = false) {
             Listener = new TcpListener(EndPoint = ipPort);
-            EnableUdpHost = enableUdpHost;
-            UdpSocket = (EnableUdpHost) ? new UdpClient(EndPoint) : null;
+            UdpSocket = (EnableUdpHost = enableUdpHost) ? new UdpClient(EndPoint) : null;
             ShutdownToken = null;
             Listener.Server.NoDelay = noDelay;
             BufferPool = (sharedBufferPool) ? ArrayPool<byte>.Shared : ArrayPool<byte>.Create();
