@@ -14,7 +14,7 @@ namespace AsyncNetworking {
         public bool SeparatePackets { get; private set; }
         public int BufferSize { get; private set; }
         public ArrayPool<byte> BufferPool { get; private set; }
-        public ConcurrentDictionary<T, T> Clients { get; private set; }
+        public ConcurrentDictionary<T, byte> Clients { get; private set; }
         public event Func<object, ServerDataEventArgs, CancellationToken, Task> Startup, Shutdown, Failed, Connected, Disconnected, Received;
 
         public AsyncServer(int clientBufferSize, IPEndPoint ipPort, bool noDelay = false, bool sharedBufferPool = false, bool separatePackets = false) {
@@ -23,7 +23,7 @@ namespace AsyncNetworking {
             Listener.Server.NoDelay = noDelay;
             BufferPool = (sharedBufferPool) ? ArrayPool<byte>.Shared : ArrayPool<byte>.Create();
             BufferSize = clientBufferSize;
-            Clients = new ConcurrentDictionary<T,T>();
+            Clients = new ConcurrentDictionary<T,byte>();
             SeparatePackets = separatePackets;
         }
 
@@ -46,7 +46,7 @@ namespace AsyncNetworking {
         }
 
         private async Task Accept(T client) {
-            Clients.TryAdd(client, client);
+            Clients.TryAdd(client, default);
             await Connected.InvokeAsync(this, new ServerDataEventArgs(this, client), client.ShutdownToken.Token).ConfigureAwait(false);
             
             try {
@@ -84,7 +84,7 @@ namespace AsyncNetworking {
 
             client.TryShutdown();
             await Disconnected.InvokeAsync(this, new ServerDataEventArgs(this, client), client.ShutdownToken.Token).ConfigureAwait(false);
-            Clients.TryRemove(client, out T res);
+            Clients.TryRemove(client, out byte _);
         }
 
         public async Task TryShutdown(bool shutdownEvent) {
