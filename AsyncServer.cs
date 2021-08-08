@@ -56,10 +56,8 @@ namespace AsyncNetworking {
 
                         if (bytes > 0) {
                             if (SeparatePackets) {
-                                /*
-                                Accounts for Naggle's algorithm and generates multiple packets based on first byte (size) of each packet.
-                                NOTE: This requires that the very first byte of EVERY packet start with a size with type a of byte.
-                                */
+                                // Accounts for Naggle's algorithm and generates multiple packets based on first byte (size) of each packet.
+                                // NOTE: This requires that the very first byte of EVERY packet start with a size with type a of byte.
                                 for (int size = 0, i = 0; i < bytes; i += size) {
                                     size = (byte)(Math.Min(rcvBuffer[i], bytes));
                                     byte[] buffer = BufferPool.Rent(size);
