@@ -4,14 +4,17 @@ TCP server written using the async/await pattern for efficiency.
 Create a new TCP server with attached parameters (and optional parameters):
 ```C#
 AsyncServer(int clientBufferSize, IPEndPoint ipPort,
+    bool enableUdpHost = false,
     bool noDelay = false,
     bool sharedBufferPool = false,
     bool separatePackets = false)
     
 /*
+    EnableUdpHost : The server creates a UDP host endpoint for ocnnectionless networking.
+    NoDelay : Whether Nagle's algorithm is enabled (same default as TcpListener.NoDelay)
     SharedBufferPool : The server uses an ArrayPool<byte> for creating buffers to avoid fragmentation.
-        This parameter decides whether the bufferpool should be a shared resource or be newly allocated.
-    SeparatePackets : The server can now handle Nagle's algorithm by reading the first byte of each message
+        This parameter decides whether the bufferpool should pull an existing shared resource pool or be newly allocated.
+    SeparatePackets : The server can handle Nagle's algorithm by reading the first byte of each message
         to figure out the size of messages sent to separate out grouped messages (max message size is 256 bytes when enabled).
         ** If disabled you may receive messages grouped together in a single buffer that you'll need to handle on your own.
 */
@@ -48,6 +51,9 @@ These asynchronous events will have an instance of `ServerDataEventArgs` which w
 Just FYI when you subscribe a calling method to `Received` you'll receive a buffer with data packet(s) in it. Due to Nagle's algorithm this buffer may contain multiple packets sent from a single client iF `SeparatePackets` is set to `false`. If `SeparatePackets` is set to `true` then the buffer will separate out each message by reading out the first message byte as the size of the message and jumping through the buffer finding subsequent messages.
 
 The buffer will be automatically disposed/returned when the `DataReceived` event returns.
+
+---
+If `EnableUdpHost` is set to `true` then the server will create a UDP host on the same endpoint (IP and Port) as the TCP server. The UDP Host will then throw `Receive` events just as TCP clients do, except that the `ServerDataEventArgs` will not contain a client object when the `Receive` event is thrown. Please note that the UDP connection will NOT pull buffers from the server's shared internal buffer pool.
 
 ---
 When you wish to send data to a specific `AsyncClient` you can do the following. The `bytes` parameter is optional, specify if you want to send a certain number of bytes or exclude if you want to send the entire buffer:
