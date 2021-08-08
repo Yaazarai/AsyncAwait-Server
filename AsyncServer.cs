@@ -9,16 +9,20 @@ using System.Threading.Tasks;
 namespace AsyncNetworking {
     public class AsyncServer<T> where T : AsyncClient {
         public TcpListener Listener { get; private set; }
+        public UdpClient UdpSocket { get; private set; }
         public CancellationTokenSource ShutdownToken { get; private set; }
         public IPEndPoint EndPoint { get; private set; }
+        public bool EnableUdpHost { get; private set; }
         public bool SeparatePackets { get; private set; }
         public int BufferSize { get; private set; }
         public ArrayPool<byte> BufferPool { get; private set; }
         public ConcurrentDictionary<T, byte> Clients { get; private set; }
         public event Func<object, ServerDataEventArgs, CancellationToken, Task> Startup, Shutdown, Failed, Connected, Disconnected, Received;
 
-        public AsyncServer(int clientBufferSize, IPEndPoint ipPort, bool noDelay = false, bool sharedBufferPool = false, bool separatePackets = false) {
+        public AsyncServer(int clientBufferSize, IPEndPoint ipPort, bool enableUdpHost = false, bool noDelay = false, bool sharedBufferPool = false, bool separatePackets = false) {
             Listener = new TcpListener(EndPoint = ipPort);
+            EnableUdpHost = enableUdpHost;
+            UdpSocket = (EnableUdpHost) ? new UdpClient(EndPoint) : null;
             ShutdownToken = null;
             Listener.Server.NoDelay = noDelay;
             BufferPool = (sharedBufferPool) ? ArrayPool<byte>.Shared : ArrayPool<byte>.Create();
@@ -43,6 +47,16 @@ namespace AsyncNetworking {
             }
 
             await TryShutdown(true).ConfigureAwait(false);
+        }
+
+        private async Task UdpListen() {
+            if (EnableUdpHost) {
+                UdpSocket.Connect(EndPoint);
+                while (!ShutdownToken.IsCancellationRequested)
+                    _ = Received.InvokeAsync(this, new ServerDataEventArgs(this, null, (await UdpSocket.ReceiveAsync()).Buffer), ShutdownToken.Token).ConfigureAwait(false);
+                UdpSocket.Client.Shutdown(SocketShutdown.Both);
+                UdpSocket.Client.Close();
+            }
         }
 
         private async Task Accept(T client) {
@@ -93,14 +107,17 @@ namespace AsyncNetworking {
                     await Shutdown.InvokeAsync(this, ServerDataEventArgs.Empty, ShutdownToken.Token).ConfigureAwait(false);
                 
                 foreach (var client in Clients) client.Key.TryShutdown();
-                ShutdownToken.Cancel();
+                ShutdownToken?.Cancel();
+                Listener?.Stop();
+                UdpSocket?.Close();
             }
         }
 
         ~AsyncServer() {
             Task.WaitAll(TryShutdown(false));
-            ShutdownToken.Dispose();
-            Listener.Server.Dispose();
+            ShutdownToken?.Dispose();
+            Listener?.Server.Dispose();
+            UdpSocket?.Dispose();
         }
     }
 
