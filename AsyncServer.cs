@@ -15,7 +15,7 @@ namespace AsyncNetworking {
         public int BufferSize { get; private set; }
         public ArrayPool<byte> BufferPool { get; private set; }
         public ConcurrentDictionary<T, T> Clients { get; private set; }
-        public event Func<object, ServerDataEventArgs, CancellationToken, Task> Startup, Shutdown, Failed, Connected, Disconnected, DataReceived;
+        public event Func<object, ServerDataEventArgs, CancellationToken, Task> Startup, Shutdown, Failed, Connected, Disconnected, Received;
 
         public AsyncServer(int clientBufferSize, IPEndPoint ipPort, bool noDelay = false, bool sharedBufferPool = false, bool separatePackets = false) {
             Listener = new TcpListener(EndPoint = ipPort);
@@ -64,7 +64,7 @@ namespace AsyncNetworking {
                                     size = (byte)(Math.Min(rcvBuffer[i], bytes));
                                     byte[] buffer = BufferPool.Rent(size);
                                     Buffer.BlockCopy(rcvBuffer, i, buffer, 0, size);
-                                    Task received = DataReceived.InvokeAsync(this, new ServerDataEventArgs(this, client, buffer), client.ShutdownToken.Token);
+                                    Task received = Received.InvokeAsync(this, new ServerDataEventArgs(this, client, buffer), client.ShutdownToken.Token);
                                     _ = received.ContinueWith(_ => { BufferPool.Return(buffer); });
                                 }
                             } else {
@@ -72,7 +72,7 @@ namespace AsyncNetworking {
                                 //Always check each buffer on DataReceived.InvokeAsync() for multiple packets.
                                 byte[] buffer = BufferPool.Rent(Math.Min(BufferSize, bytes));
                                 Buffer.BlockCopy(rcvBuffer, 0, buffer, 0, bytes);
-                                Task received = DataReceived.InvokeAsync(this, new ServerDataEventArgs(this, client, buffer), client.ShutdownToken.Token);
+                                Task received = Received.InvokeAsync(this, new ServerDataEventArgs(this, client, buffer), client.ShutdownToken.Token);
                                 _ = received.ContinueWith(_ => { BufferPool.Return(buffer); });
                             }
                         }
