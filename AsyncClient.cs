@@ -26,6 +26,6 @@ namespace AsyncNetworking {
         }
 
         public async Task SendAsync(byte[] buffer, int count = 0) =>
-            await Client.GetStream().WriteAsync(buffer, 0, Math.Max(0, Math.Min(count, buffer.Length)));
+            await Client.GetStream().WriteAsync(buffer, 0, Math.Max(0, Math.Min(count, buffer.Length))).ConfigureAwait(false);
     }
 }
