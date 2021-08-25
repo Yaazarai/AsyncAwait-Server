@@ -18,16 +18,29 @@ namespace AsyncNetworking {
         public ArrayPool<byte> BufferPool { get; private set; }
         public ConcurrentDictionary<T, byte> Clients { get; private set; }
         public event Func<object, ServerDataEventArgs, CancellationToken, Task> Startup, Shutdown, Failed, Connected, Disconnected, Received;
+        private bool Disposed { get; set; }
 
         public AsyncServer(int clientBufferSize, IPEndPoint ipPort, bool enableUdpHost = false, bool noDelay = false, bool sharedBufferPool = false, bool separatePackets = false) {
             Listener = new TcpListener(EndPoint = ipPort);
             UdpSocket = (EnableUdpHost = enableUdpHost) ? new UdpClient(EndPoint) : null;
-            ShutdownToken = null;
+            ShutdownToken = new CancellationTokenSource();
             Listener.Server.NoDelay = noDelay;
             BufferPool = (sharedBufferPool) ? ArrayPool<byte>.Shared : ArrayPool<byte>.Create();
             BufferSize = clientBufferSize;
             Clients = new ConcurrentDictionary<T,byte>();
             SeparatePackets = separatePackets;
+        }
+
+        ~AsyncServer() => Dispose();
+
+        public void Dispose() {
+            if (Disposed) return;
+            Task.WaitAll(TryShutdown(false));
+            ShutdownToken?.Dispose();
+            Listener?.Server.Dispose();
+            UdpSocket?.Dispose();
+            GC.SuppressFinalize(this);
+            Disposed = true;
         }
 
         public async Task Listen() {
@@ -110,13 +123,6 @@ namespace AsyncNetworking {
                 Listener?.Stop();
                 UdpSocket?.Close();
             }
-        }
-
-        ~AsyncServer() {
-            Task.WaitAll(TryShutdown(false));
-            ShutdownToken?.Dispose();
-            Listener?.Server.Dispose();
-            UdpSocket?.Dispose();
         }
     }
 
