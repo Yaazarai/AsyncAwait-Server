@@ -4,18 +4,24 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace AsyncNetworking {
-    public class AsyncClient {
+    public class AsyncClient : IDisposable {
         public CancellationTokenSource ShutdownToken { get; private set; }
         public TcpClient Client { get; private set; }
+        private bool Disposed { get; set; }
 
         public AsyncClient(TcpClient client) {
             ShutdownToken = new CancellationTokenSource();
             Client = client;
+            Disposed = false;
         }
 
-        ~AsyncClient() {
-            TryShutdown();
-            ShutdownToken?.Dispose();
+        ~AsyncClient() => Dispose();
+
+        public void Dispose() {
+            if (Disposed) return;
+            ShutdownToken.Dispose();
+            GC.SuppressFinalize(this);
+            Disposed = true;
         }
 
         public void TryShutdown() {
