@@ -20,7 +20,7 @@ namespace AsyncNetworking {
         public event Func<object, ServerDataEventArgs, CancellationToken, Task> Startup, Shutdown, Failed, Connected, Disconnected, Received;
         private bool Disposed { get; set; }
 
-        public AsyncServer(int clientBufferSize, IPEndPoint ipPort, bool enableUdpHost = false, bool noDelay = false, bool sharedBufferPool = false, bool separatePackets = false) {
+        public AsyncServer(int clientBufferSize, IPEndPoint ipPort, bool enableUdpHost = false, bool noDelay = false, bool sharedBufferPool = false, bool separatePackets = true) {
             Listener = new TcpListener(EndPoint = ipPort);
             UdpSocket = (EnableUdpHost = enableUdpHost) ? new UdpClient(EndPoint) : null;
             ShutdownToken = new CancellationTokenSource();
